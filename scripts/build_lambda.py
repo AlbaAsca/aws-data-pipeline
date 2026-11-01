@@ -1,5 +1,6 @@
 """Empaqueta la Lambda: handler.py + duckdb para Linux x86_64 -> dist/ingest_lambda.zip."""
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -12,13 +13,17 @@ ZIP = ROOT / "dist" / "ingest_lambda"
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--duckdb-version", help="por defecto, la instalada en local")
+    args = ap.parse_args()
+
     shutil.rmtree(BUILD, ignore_errors=True)
     BUILD.mkdir(parents=True)
     # La misma versión de duckdb que en local, compilada para el runtime de Lambda.
     subprocess.run(
         [
             sys.executable, "-m", "pip", "install", "--quiet",
-            f"duckdb=={version('duckdb')}",
+            f"duckdb=={args.duckdb_version or version('duckdb')}",
             "--platform", "manylinux_2_28_x86_64", "--python-version", "3.12",
             "--implementation", "cp", "--only-binary=:all:", "--target", str(BUILD),
         ],
