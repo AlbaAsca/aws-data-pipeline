@@ -24,7 +24,7 @@ ingest: ## Invoca la Lambda una vez por día (DAYS=30)
 	AWS_ENDPOINT_URL=http://localhost:4566 $(PY) scripts/backfill.py --days $(DAYS)
 
 transform: ## dbt build sobre el Parquet de S3 (modelos + tests)
-	cd transform && RAW_GLOB=$$(cd ../$(TF_DIR) && tflocal output -raw raw_glob) dbt build --target lake --profiles-dir .
+	mkdir -p data && cd transform && RAW_GLOB=$$(cd ../$(TF_DIR) && tflocal output -raw raw_glob) dbt build --target lake --profiles-dir .
 
 dashboard: ## Abre el panel en http://localhost:8501
 	streamlit run dashboard/app.py
