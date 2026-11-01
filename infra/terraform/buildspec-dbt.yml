@@ -1,0 +1,23 @@
+version: 0.2
+
+env:
+  variables:
+    S3_USE_SSL: "true"
+    S3_URL_STYLE: vhost
+    DUCKDB_PATH: /tmp/warehouse.duckdb
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - git clone --depth 1 ${repo_url} pipeline
+      - pip install --quiet boto3 duckdb "dbt-duckdb>=1.9"
+  build:
+    commands:
+      - cd pipeline/transform
+      # DuckDB necesita las credenciales del rol de CodeBuild como variables de entorno.
+      - eval $(aws configure export-credentials --format env)
+      - export AWS_DEFAULT_REGION=$AWS_REGION
+      - dbt build --target lake --profiles-dir .
+      - aws s3 cp $DUCKDB_PATH s3://$LAKE_BUCKET/warehouse/warehouse.duckdb

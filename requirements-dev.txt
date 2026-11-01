@@ -10,7 +10,7 @@ matplotlib>=3.9,<3.11  # mplcyberpunk aún no soporta 3.11
 mplcyberpunk>=0.7
 # Calidad
 pytest>=8
-moto[s3]>=5
+moto[s3,ssm]>=5
 ruff>=0.8
 # LocalStack + Terraform
 terraform-local>=0.20

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import duckdb
 
+# Lista por defecto; en AWS se lee de SSM (CITIES_PARAM) para añadir ciudades sin desplegar código.
 CITIES = [
     ("madrid", 40.4168, -3.7038),
     ("barcelona", 41.3874, 2.1686),
@@ -56,11 +57,24 @@ def resolve_date(event: dict | None, today: dt.date | None = None) -> dt.date:
     return today - dt.timedelta(days=1)
 
 
-def build_url(day: dt.date, today: dt.date) -> str:
+def load_cities(ssm_client=None) -> list[tuple[str, float, float]]:
+    """Ciudades del parámetro SSM `CITIES_PARAM` (JSON [{city, lat, lon}]) o, si no hay, las de por defecto."""
+    name = os.environ.get("CITIES_PARAM")
+    if not name:
+        return CITIES
+    if ssm_client is None:
+        import boto3
+
+        ssm_client = boto3.client("ssm")
+    value = json.loads(ssm_client.get_parameter(Name=name)["Parameter"]["Value"])
+    return [(c["city"], float(c["lat"]), float(c["lon"])) for c in value]
+
+
+def build_url(day: dt.date, today: dt.date, cities: list[tuple[str, float, float]] = CITIES) -> str:
     base = FORECAST_URL if (today - day).days <= FORECAST_MAX_DAYS_AGO else ARCHIVE_URL
     params = {
-        "latitude": ",".join(str(lat) for _, lat, _ in CITIES),
-        "longitude": ",".join(str(lon) for _, _, lon in CITIES),
+        "latitude": ",".join(str(lat) for _, lat, _ in cities),
+        "longitude": ",".join(str(lon) for _, _, lon in cities),
         "hourly": ",".join(HOURLY),
         "start_date": day.isoformat(),
         "end_date": day.isoformat(),
@@ -85,11 +99,13 @@ def fetch(url: str, timeout: int = 30, retries: int = 3, backoff: float = 2.0) -
     return payload if isinstance(payload, list) else [payload]
 
 
-def to_rows(payload: list[dict], ingested_at: dt.datetime) -> list[tuple]:
-    if len(payload) != len(CITIES):
-        raise ValueError(f"Se esperaban {len(CITIES)} ubicaciones y llegaron {len(payload)}")
+def to_rows(
+    payload: list[dict], ingested_at: dt.datetime, cities: list[tuple[str, float, float]] = CITIES
+) -> list[tuple]:
+    if len(payload) != len(cities):
+        raise ValueError(f"Se esperaban {len(cities)} ubicaciones y llegaron {len(payload)}")
     rows = []
-    for (city, _, _), location in zip(CITIES, payload, strict=True):
+    for (city, _, _), location in zip(cities, payload, strict=True):
         hourly = location["hourly"]
         if any(t is None for t in hourly["temperature_2m"]):
             raise ValueError(f"{city}: la API devolvió horas sin temperatura; no se escribe un día incompleto")
@@ -125,7 +141,8 @@ def lambda_handler(event: dict | None, context: object = None) -> dict:
 
     today = dt.datetime.now(dt.UTC).date()
     day = resolve_date(event, today)
-    rows = to_rows(fetch(build_url(day, today)), ingested_at=dt.datetime.now(dt.UTC).replace(tzinfo=None))
+    cities = load_cities()
+    rows = to_rows(fetch(build_url(day, today, cities)), dt.datetime.now(dt.UTC).replace(tzinfo=None), cities)
 
     bucket = os.environ["RAW_BUCKET"]
     key = object_key(os.environ.get("RAW_PREFIX", "raw/weather"), day)

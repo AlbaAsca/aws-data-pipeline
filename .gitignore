@@ -13,3 +13,4 @@ logs/
 *.tfstate*
 localstack_providers_override.tf
 .terraform.lock.hcl
+infra/terraform/backend.tf

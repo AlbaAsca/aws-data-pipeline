@@ -1,0 +1,94 @@
+name: Deploy (AWS)
+
+# Despliegue manual a una cuenta real de AWS, sin claves guardadas: GitHub OIDC asume el rol
+# creado por infra/bootstrap. Requiere las variables de repositorio AWS_ROLE_ARN, TF_STATE_BUCKET
+# y, opcionales, AWS_REGION y ALERT_EMAIL.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Qué hacer
+        type: choice
+        options: [plan, apply, destroy]
+        default: plan
+      backfill_days:
+        description: Días a ingerir tras el apply (0 = ninguno)
+        type: number
+        default: 3
+
+permissions:
+  id-token: write # pedir el token OIDC
+  contents: read
+
+concurrency: deploy-aws # nunca dos despliegues a la vez sobre el mismo estado
+
+jobs:
+  terraform:
+    name: terraform ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    environment: aws
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      TF_VAR_region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+      TF_VAR_enable_scheduled_dbt: "true"
+      TF_IN_AUTOMATION: "1"
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Empaquetar la Lambda
+        working-directory: .
+        run: |
+          pip install --quiet boto3 duckdb
+          python scripts/build_lambda.py
+
+      - name: terraform init (estado remoto en S3)
+        run: |
+          printf 'terraform {\n  backend "s3" {}\n}\n' > backend.tf
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=weather-pipeline/dev.tfstate" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="use_lockfile=true"
+
+      - name: terraform plan
+        if: inputs.action == 'plan'
+        run: terraform plan -input=false
+
+      - name: terraform apply
+        if: inputs.action == 'apply'
+        run: terraform apply -input=false -auto-approve
+
+      - name: Ingesta inicial y primer dbt build
+        if: inputs.action == 'apply' && inputs.backfill_days > 0
+        working-directory: .
+        run: |
+          python scripts/backfill.py --days ${{ inputs.backfill_days }}
+          project=$(terraform -chdir=infra/terraform output -raw dbt_project)
+          id=$(aws codebuild start-build --project-name "$project" --query build.id --output text)
+          echo "CodeBuild: $id"
+          for _ in $(seq 60); do
+            status=$(aws codebuild batch-get-builds --ids "$id" --query 'builds[0].buildStatus' --output text)
+            [ "$status" != "IN_PROGRESS" ] && break
+            sleep 10
+          done
+          echo "dbt en CodeBuild: $status"
+          [ "$status" = "SUCCEEDED" ]
+
+      - name: terraform destroy
+        if: inputs.action == 'destroy'
+        run: terraform destroy -input=false -auto-approve

@@ -5,7 +5,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=s3,lambda,iam,sts,logs,events
+      - SERVICES=s3,lambda,iam,sts,logs,events,ssm,sqs,sns,cloudwatch
       - LAMBDA_DOCKER_NETWORK=localstack-net # la Lambda alcanza S3 dentro de LocalStack
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock # LocalStack lanza cada Lambda en un contenedor

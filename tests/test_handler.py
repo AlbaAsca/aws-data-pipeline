@@ -102,3 +102,29 @@ def test_fetch_does_not_retry_client_errors(monkeypatch):
     monkeypatch.setattr(handler.urllib.request, "urlopen", fake_urlopen)
     with pytest.raises(urllib.error.HTTPError):
         handler.fetch("https://x")
+
+
+@mock_aws
+def test_load_cities_from_ssm(monkeypatch):
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "eu-south-2")
+    monkeypatch.setenv("CITIES_PARAM", "/weather-pipeline/dev/cities")
+    ssm = boto3.client("ssm")
+    value = [{"city": "madrid", "lat": 40.4, "lon": -3.7}, {"city": "oviedo", "lat": 43.36, "lon": -5.84}]
+    ssm.put_parameter(Name="/weather-pipeline/dev/cities", Value=json.dumps(value), Type="String")
+
+    cities = handler.load_cities()
+    assert cities == [("madrid", 40.4, -3.7), ("oviedo", 43.36, -5.84)]
+    assert "latitude=40.4%2C43.36" in handler.build_url(dt.date(2026, 10, 30), TODAY, cities)
+
+
+def test_load_cities_defaults_without_param(monkeypatch):
+    monkeypatch.delenv("CITIES_PARAM", raising=False)
+    assert handler.load_cities() == handler.CITIES
+
+
+def test_default_cities_match_dbt_seed():
+    import csv
+
+    seed = Path(__file__).parents[1] / "transform" / "seeds" / "cities.csv"
+    with seed.open(encoding="utf-8") as f:
+        assert {r["city"] for r in csv.DictReader(f)} == {c for c, _, _ in handler.CITIES}

@@ -28,11 +28,13 @@ jobs:
           cd transform && dbt build --profiles-dir .
       - uses: hashicorp/setup-terraform@v3
       - name: terraform fmt + validate
-        working-directory: infra/terraform
+        working-directory: infra
         run: |
           terraform fmt -check -recursive
-          terraform init -backend=false -input=false
-          terraform validate
+          for stack in terraform bootstrap; do
+            terraform -chdir=$stack init -backend=false -input=false
+            terraform -chdir=$stack validate
+          done
 
   localstack-e2e:
     name: Punta a punta en LocalStack

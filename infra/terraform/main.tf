@@ -81,7 +81,7 @@ resource "aws_iam_role" "ingest" {
   assume_role_policy = data.aws_iam_policy_document.assume_lambda.json
 }
 
-# Mínimo privilegio: solo escribir en raw/ y sus propios logs.
+# Mínimo privilegio: escribir en raw/, sus logs, leer su lista de ciudades y su DLQ.
 data "aws_iam_policy_document" "ingest" {
   statement {
     actions   = ["s3:PutObject"]
@@ -90,6 +90,14 @@ data "aws_iam_policy_document" "ingest" {
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["${aws_cloudwatch_log_group.ingest.arn}:*"]
+  }
+  statement {
+    actions   = ["ssm:GetParameter"]
+    resources = [aws_ssm_parameter.cities.arn]
+  }
+  statement {
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.ingest_dlq.arn]
   }
 }
 
@@ -115,9 +123,15 @@ resource "aws_lambda_function" "ingest" {
 
   environment {
     variables = {
-      RAW_BUCKET = aws_s3_bucket.lake.id
-      RAW_PREFIX = var.raw_prefix
+      RAW_BUCKET   = aws_s3_bucket.lake.id
+      RAW_PREFIX   = var.raw_prefix
+      CITIES_PARAM = aws_ssm_parameter.cities.name
     }
+  }
+
+  # Si falla tras los reintentos asíncronos, el evento acaba en la DLQ en vez de perderse.
+  dead_letter_config {
+    target_arn = aws_sqs_queue.ingest_dlq.arn
   }
 
   depends_on = [aws_cloudwatch_log_group.ingest]
@@ -142,4 +156,18 @@ resource "aws_lambda_permission" "events" {
   function_name = aws_lambda_function.ingest.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily.arn
+}
+
+resource "aws_lambda_function_event_invoke_config" "ingest" {
+  function_name          = aws_lambda_function.ingest.function_name
+  maximum_retry_attempts = 2
+}
+
+# ---------- Configuración: ciudades en SSM ----------
+
+resource "aws_ssm_parameter" "cities" {
+  name        = "/${var.project}/${var.environment}/cities"
+  description = "Ciudades que ingiere la Lambda (JSON). Añadir una: editar var.cities y el seed de dbt."
+  type        = "String" # parámetro estándar: gratis
+  value       = jsonencode(var.cities)
 }
