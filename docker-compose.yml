@@ -1,0 +1,20 @@
+services:
+  localstack:
+    image: localstack/localstack:4.14.0 # última versión comunitaria sin token
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,lambda,iam,sts,logs,events
+      - LAMBDA_DOCKER_NETWORK=localstack-net # la Lambda alcanza S3 dentro de LocalStack
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # LocalStack lanza cada Lambda en un contenedor
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      retries: 30
+    networks: [localstack-net]
+
+networks:
+  localstack-net:
+    name: localstack-net
