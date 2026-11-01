@@ -172,26 +172,84 @@ Estimación mensual con el volumen real del proyecto (1 invocación diaria de ~5
 | **QuickSight** | Licencia por usuario para un panel personal | decenas de $/usuario/mes |
 | **MWAA** (Airflow gestionado) | Orquestar una sola tarea diaria | ~350 $/mes el entorno mínimo |
 
-> Los precios cambian y dependen de la región (`eu-south-2`, España, en este proyecto).
+> Los precios cambian y dependen de la región. La región por defecto es `eu-south-2` (España),
+> pero hay que activarla a mano en la cuenta; el despliegue real se hizo en `eu-west-1` (Irlanda).
 > Antes de desplegar, conviene revisarlos en la
 > [calculadora de AWS](https://calculator.aws/) y confirmar las condiciones de la capa
 > gratuita, que cambiaron en julio de 2025.
 
 ## Fase 2: despliegue real en AWS
 
-> 🚧 **Pendiente.** Esta sección se completará tras desplegar el pipeline un día en una cuenta
-> real y destruirlo después.
+El 1 de noviembre de 2026 desplegué el pipeline en una cuenta real de AWS durante una
+hora, lo ejecuté de punta a punta y lo destruí. **Mismos `.tf`, mismo código:** lo único que
+cambió fue usar `terraform` en lugar de `tflocal` y apuntar DuckDB al S3 real.
 
-Plan:
+### 1 · Primero, el freno de mano: un presupuesto
 
-1. Revisar la capa gratuita vigente y crear **primero** una alarma de presupuesto de 1 $.
-2. `terraform apply` con credenciales reales (mismos `.tf`, sin `tflocal`).
-3. Lanzar la ingesta y `make transform` apuntando a S3 real
-   (`S3_ENDPOINT=s3.eu-south-2.amazonaws.com S3_USE_SSL=true S3_URL_STYLE=vhost`).
-4. Capturas de la consola (Lambda, S3, EventBridge, CloudWatch) y de la factura.
-5. `terraform destroy` y comprobar que no queda nada facturando.
+Antes de crear nada, un presupuesto mensual de 10 $ con avisos por email al 85 % y 100 % del
+gasto real y al 100 % del previsto. AWS Budgets es gratuito.
 
-<!-- Capturas y factura real aquí -->
+![Presupuesto en AWS Budgets](docs/img/aws/00-budget.jpg)
+
+### 2 · Despliegue desde CloudShell
+
+Sin instalar nada ni guardar claves en el portátil: [AWS CloudShell](https://aws.amazon.com/cloudshell/)
+ya trae credenciales temporales de la sesión. Instalé Terraform en `/tmp` (el *home* de CloudShell
+solo tiene 1 GB y el *provider* de AWS ocupa ~700 MB: el primer `init` falló por eso) y
+desplegué en `eu-west-1`:
+
+```bash
+python scripts/build_lambda.py
+export TF_DATA_DIR=/tmp/tfdata                 # providers fuera del home de 1 GB
+terraform -chdir=infra/terraform plan -var region=eu-west-1 -out=tfplan   # 11 recursos
+terraform -chdir=infra/terraform apply tfplan
+```
+
+![Lambda con su disparador de EventBridge](docs/img/aws/01-lambda-eventbridge.jpg)
+
+### 3 · Ingesta y transformación contra S3 real
+
+```bash
+python scripts/backfill.py --days 7
+eval $(aws configure export-credentials --format env)   # DuckDB necesita las credenciales en variables
+S3_ENDPOINT=s3.eu-west-1.amazonaws.com S3_USE_SSL=true S3_URL_STYLE=vhost RAW_GLOB=$(terraform -chdir=infra/terraform output -raw raw_glob)   dbt build --target lake --profiles-dir transform
+```
+
+Siete particiones `dt=` en el bucket y los 20 nodos de dbt (3 modelos, 1 *seed*, 16 tests) en verde:
+
+![Particiones en S3](docs/img/aws/02-s3-partitions.jpg)
+![dbt build contra S3 real](docs/img/aws/04-dbt-build-s3.jpg)
+
+### 4 · Lo que la nube real enseñó (y LocalStack no)
+
+- **La API externa falla.** La primera invocación recibió un `HTTP 503` de Open-Meteo: se ve como
+  el error en las métricas de la Lambda. En LocalStack nunca pasó. Ahora `fetch()` reintenta
+  con espera creciente ante 429/5xx y no reintenta los 4xx (con tests).
+- **Rendimiento:** ~1 s de media por invocación (máx. 2,8 s en frío), muy por debajo del
+  *timeout* de 60 s y del 1 % de la capa gratuita de Lambda.
+- **Límites del entorno:** el 1 GB de CloudShell no da para el *provider* de Terraform.
+
+![Métricas de la Lambda](docs/img/aws/03-lambda-metrics.jpg)
+
+### 5 · `terraform destroy`
+
+![terraform destroy](docs/img/aws/05-terraform-destroy.jpg)
+
+11 recursos destruidos; `aws s3 ls` y `aws lambda list-functions` ya no muestran nada del
+proyecto. El presupuesto se queda como red de seguridad.
+
+### Coste real
+
+| Concepto | Uso | Coste |
+|---|---|---|
+| Lambda | 8 invocaciones · ~8 GB-s | 0 $ (capa gratuita permanente) |
+| S3 | 7 objetos de ~10 KB, ~50 peticiones | < 0,01 $ |
+| CloudShell, EventBridge, CloudWatch, Budgets | — | 0 $ |
+
+<!-- Captura de la factura: AWS tarda ~24 h en reflejar el gasto; se añadirá aquí. -->
+
+> **Mejora pendiente:** la prueba se hizo con el usuario *root* desde CloudShell. Para algo más
+> que una demo de una hora, lo correcto es un usuario o rol IAM con permisos acotados y MFA.
 
 ## Licencia
 
