@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_weather__hourly
+    description: Observaciones horarias (UTC) deduplicadas, tal y como llegan de Open-Meteo.
+    columns:
+      - name: city
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('cities'), field: city}
+      - name: observed_at
+        data_tests: [not_null]
+      - name: observation_date
+        data_tests: [not_null]
+
+  - name: fct_weather_daily
+    description: Una fila por ciudad y día.
+    columns:
+      - name: city
+        data_tests: [not_null]
+      - name: observation_date
+        data_tests: [not_null]
+      - name: hours_observed
+        data_tests:
+          - accepted_values:
+              arguments: {values: [24], quote: false}
+
+  - name: city_climate_summary
+    description: Resumen por ciudad de todo el periodo cargado.
+    columns:
+      - name: city
+        data_tests: [unique, not_null]
+
+seeds:
+  - name: cities
+    description: Ciudades que ingiere la Lambda (misma lista que handler.CITIES).
+    columns:
+      - name: city
+        data_tests: [unique, not_null]

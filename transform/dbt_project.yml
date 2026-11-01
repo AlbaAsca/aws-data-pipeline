@@ -1,0 +1,20 @@
+name: weather
+version: "1.0.0"
+profile: weather
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+vars:
+  # Local: Parquet en data/raw/. LocalStack/AWS: s3://<bucket>/raw/weather/**/*.parquet
+  raw_glob: "{{ env_var('RAW_GLOB', '../data/raw/weather/**/*.parquet') }}"
+
+models:
+  weather:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
