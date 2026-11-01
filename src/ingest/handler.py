@@ -10,6 +10,8 @@ import datetime as dt
 import json
 import os
 import tempfile
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -68,9 +70,17 @@ def build_url(day: dt.date, today: dt.date) -> str:
     return f"{base}?{urllib.parse.urlencode(params)}"
 
 
-def fetch(url: str, timeout: int = 30) -> list[dict]:
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (URL fija, https)
-        payload = json.load(resp)
+def fetch(url: str, timeout: int = 30, retries: int = 3, backoff: float = 2.0) -> list[dict]:
+    # Open-Meteo devuelve 503/429 de vez en cuando (visto en el despliegue real): se reintenta con espera.
+    for attempt in range(1, retries + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (URL fija, https)
+                payload = json.load(resp)
+            break
+        except urllib.error.HTTPError as err:
+            if err.code not in (429, 500, 502, 503, 504) or attempt == retries:
+                raise
+            time.sleep(backoff * attempt)
     # Con varias coordenadas la API devuelve una lista; con una sola, un objeto.
     return payload if isinstance(payload, list) else [payload]
 

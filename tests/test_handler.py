@@ -1,5 +1,7 @@
 import datetime as dt
+import io
 import json
+import urllib.error
 from pathlib import Path
 
 import boto3
@@ -76,3 +78,27 @@ def test_to_rows_rejects_days_without_data(payload):
     payload[0]["hourly"]["temperature_2m"][5] = None
     with pytest.raises(ValueError, match="madrid"):
         handler.to_rows(payload, ingested_at=dt.datetime(2026, 11, 1))
+
+
+def test_fetch_retries_transient_errors(payload, monkeypatch):
+    calls = []
+
+    def fake_urlopen(url, timeout):
+        calls.append(url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+        return io.BytesIO(json.dumps(payload).encode())
+
+    monkeypatch.setattr(handler.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(handler.time, "sleep", lambda s: None)
+    assert len(handler.fetch("https://x")) == 6
+    assert len(calls) == 3
+
+
+def test_fetch_does_not_retry_client_errors(monkeypatch):
+    def fake_urlopen(url, timeout):
+        raise urllib.error.HTTPError(url, 400, "Bad Request", {}, None)
+
+    monkeypatch.setattr(handler.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(urllib.error.HTTPError):
+        handler.fetch("https://x")
