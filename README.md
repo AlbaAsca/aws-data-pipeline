@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/temperature.gif" alt="60 días de temperatura en seis ciudades, dibujándose" width="90%">
+  <img src="docs/img/temperature.gif?v=2" alt="60 días de temperatura en seis ciudades, dibujándose" width="90%">
 </p>
 
 | ☁️ Coste real en AWS | ✅ Calidad | 🛡️ Operación | 🔁 Reproducible |
