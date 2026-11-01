@@ -40,6 +40,8 @@ data "aws_caller_identity" "current" {}
 locals {
   account = data.aws_caller_identity.current.account_id
   prefix  = var.project
+  owner   = split("/", var.github_repo)[0]
+  repo    = split("/", var.github_repo)[1]
 }
 
 # ---------- Estado remoto ----------
@@ -93,10 +95,14 @@ data "aws_iam_policy_document" "trust_github" {
       values   = ["sts.amazonaws.com"]
     }
     # Solo jobs de este repo que usen el entorno "aws" de GitHub (que puede exigir aprobación).
+    # Los repos nuevos usan sujetos inmutables: repo:<owner>@<id>/<repo>@<id>:environment:aws
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repo}:environment:aws"]
+      values = [
+        "repo:${var.github_repo}:environment:aws",
+        "repo:${local.owner}@*/${local.repo}@*:environment:aws",
+      ]
     }
   }
 }
