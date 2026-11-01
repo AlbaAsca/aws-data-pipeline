@@ -22,7 +22,14 @@ OUT = Path(__file__).resolve().parents[1] / "docs" / "img" / "architecture"
 
 GRAPH = {"bgcolor": "#FFFFFF", "pad": "0.4", "fontcolor": "#1F2A44", "fontsize": "22", "splines": "spline"}
 NODE = {"fontcolor": "#1F2A44", "fontsize": "12"}
-CLUSTER = {"bgcolor": "#F3F6FC", "fontcolor": "#232F3E", "pencolor": "#8C9BB5", "fontsize": "14", "style": "rounded", "labelloc": "b"}
+CLUSTER = {
+    "bgcolor": "#F3F6FC",
+    "fontcolor": "#232F3E",
+    "pencolor": "#8C9BB5",
+    "fontsize": "14",
+    "style": "rounded",
+    "labelloc": "b",
+}
 
 
 def edge(label: str = "", color: str = "#0B7FAB") -> Edge:
