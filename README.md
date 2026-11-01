@@ -13,6 +13,10 @@ cada día una Lambda descarga el tiempo horario de seis ciudades españolas, lo 
 como Parquet particionado por fecha, dbt + DuckDB lo transforma y comprueba su calidad, y un
 panel en Streamlit lo enseña.
 
+| ☁️ Coste real en AWS | ✅ Calidad | 📦 Datos | 🔁 Reproducible |
+|:---:|:---:|:---:|:---:|
+| **< 0,01 $** en el despliegue de prueba | **16 tests** de dbt + **11** de pytest | **6 ciudades** · 24 h/día · Parquet | **`make all`** en LocalStack, igual en el CI |
+
 ![Temperatura media diaria](docs/img/temperature.png)
 
 ## El problema
@@ -35,6 +39,11 @@ también es gratis, pero exige pedir una clave, y eso lo haría menos reproducib
 clone el repo.
 
 ## Arquitectura
+
+![Arquitectura con iconos de AWS](docs/img/architecture.png)
+
+<sub>Generado como código con [`diagrams`](https://diagrams.mingrammer.com/): `python scripts/make_architecture.py`.
+Debajo, la misma arquitectura en Mermaid, que GitHub dibuja directamente.</sub>
 
 ```mermaid
 flowchart LR
@@ -69,6 +78,30 @@ flowchart LR
 | Visualización | QuickSight | Streamlit |
 | Infraestructura | Terraform | Terraform vía `tflocal` |
 
+### Un día en la vida del pipeline
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant EB as ⏰ EventBridge
+    participant L as λ Lambda
+    participant API as 🌦️ Open-Meteo
+    participant S3 as 🪣 S3
+    participant DBT as 🧱 dbt + DuckDB
+    EB->>L: 06:00 UTC · {} → «ayer»
+    L->>API: GET /forecast (6 ciudades, 24 h, UTC)
+    alt 429 / 5xx
+        API-->>L: error temporal
+        L->>API: reintento con espera (2 s, 4 s)
+    end
+    API-->>L: JSON horario
+    L->>L: valida (sin horas vacías) y escribe Parquet con duckdb
+    L->>S3: PUT raw/weather/dt=AAAA-MM-DD/weather.parquet
+    Note over L,S3: misma clave cada día → re-ejecutar es idempotente
+    DBT->>S3: read_parquet('s3://…/**/*.parquet')
+    DBT->>DBT: staging → marts + 16 tests
+```
+
 ## Cómo ejecutarlo
 
 Necesitas Python 3.12, Docker y Terraform ≥ 1.6.
@@ -99,6 +132,22 @@ luego dbt sobre esos ficheros; útil para trabajar en los modelos sin levantar n
 
 ![Lluvia acumulada](docs/img/rain.png)
 
+## Permisos y limpieza
+
+**Qué necesitas en AWS** (fase 2): permisos para crear un bucket S3, un rol IAM con su
+política, una función Lambda, un grupo de logs de CloudWatch y una regla de EventBridge. En
+LocalStack no hace falta nada: acepta cualquier credencial.
+
+**Qué permisos tiene el pipeline una vez desplegado:** la Lambda solo puede escribir
+(`s3:PutObject`) bajo `raw/` y en su propio grupo de logs. No puede leer ni borrar nada.
+
+**Cómo dejarlo todo como estaba:**
+
+```bash
+make down                                     # LocalStack: para el contenedor y lo borra todo
+terraform -chdir=infra/terraform destroy      # AWS: borra los 11 recursos (el bucket incluido)
+```
+
 ## Qué hay dentro
 
 ```
@@ -106,7 +155,7 @@ src/ingest/handler.py     Lambda: Open-Meteo -> Parquet -> S3 (idempotente por d
 infra/terraform/          S3 (cifrado, sin acceso público), IAM mínimo, Lambda, EventBridge, logs
 transform/                Proyecto dbt: staging (vista) -> marts (tablas) + tests
 dashboard/                Streamlit + gráficas mplcyberpunk
-scripts/                  build_lambda, backfill, run_local, make_charts
+scripts/                  build_lambda, backfill, run_local, make_charts, make_architecture
 .github/workflows/ci.yml  Lint, tests, dbt, terraform validate y el pipeline entero en LocalStack
 ```
 
@@ -120,6 +169,27 @@ Estos tests ya han cazado un fallo real: la API de previsión de Open-Meteo solo
 semanas de pasado y, más atrás, devuelve `null` sin dar error. El test
 `assert_no_missing_measurements` lo detectó en un *backfill* de 60 días; ahora la Lambda usa
 la API de archivo para fechas antiguas y se niega a escribir un día incompleto.
+
+### Linaje de los datos y qué protege cada test
+
+```mermaid
+flowchart LR
+    RAW[("S3 raw/<br/>Parquet por día")]
+    SEED["seed<br/>cities.csv"]
+    STG["stg_weather__hourly<br/><i>vista</i>"]
+    FCT["fct_weather_daily<br/><i>tabla</i>"]
+    SUM["city_climate_summary<br/><i>tabla</i>"]
+    APP["📊 Streamlit"]
+
+    RAW --> STG --> FCT --> SUM
+    SEED --> FCT
+    FCT --> APP
+    SUM --> APP
+
+    T1{{"✔ 1 fila por ciudad y hora<br/>✔ sin medidas vacías<br/>✔ valores físicos plausibles<br/>✔ partición = fecha real<br/>✔ ciudad existe en el seed"}} -.- STG
+    T2{{"✔ 24 horas por día<br/>✔ 1 fila por ciudad y día"}} -.- FCT
+    T3{{"✔ ciudad única"}} -.- SUM
+```
 
 ## Decisiones y su porqué
 
@@ -250,6 +320,19 @@ proyecto. El presupuesto se queda como red de seguridad.
 
 > **Mejora pendiente:** la prueba se hizo con el usuario *root* desde CloudShell. Para algo más
 > que una demo de una hora, lo correcto es un usuario o rol IAM con permisos acotados y MFA.
+
+## Limitaciones y siguientes pasos
+
+Es un proyecto de portfolio y está terminado, pero hay cosas que haría distinto en producción:
+
+| Hoy | En producción | Por qué |
+|---|---|---|
+| dbt + DuckDB en un portátil o en el CI | dbt en una tarea programada (ECS Fargate o CodeBuild), o `dbt-athena` | Que la transformación también corra sola cada día |
+| `warehouse.duckdb` local | Tablas Iceberg en S3 Tables, consultables desde Athena | Un único sitio para los datos, sin copias locales |
+| Si la Lambda falla, solo queda en los logs | Alarma de CloudWatch sobre `Errors` y cola de mensajes fallidos (DLQ) | Enterarse del fallo sin tener que mirar |
+| Prueba en AWS con el usuario *root* | Rol IAM con permisos mínimos y MFA; despliegue desde el CI con OIDC | Nunca usar *root* para el trabajo diario |
+| Estado de Terraform en local | *Backend* S3 con bloqueo | Trabajo en equipo sin pisarse el estado |
+| 6 ciudades fijas en el código | Lista en un parámetro (SSM) o en el *seed* | Añadir ciudades sin desplegar código |
 
 ## Licencia
 
