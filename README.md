@@ -171,7 +171,8 @@ En LocalStack no hace falta nada: acepta cualquier credencial.
 ```bash
 make down                                     # LocalStack: para el contenedor y lo borra todo
 gh workflow run deploy.yml -f action=destroy  # AWS: borra los 26 recursos (el bucket incluido)
-terraform -chdir=infra/bootstrap destroy      # opcional: rol OIDC y bucket de estado (cuestan 0 $)
+terraform -chdir=infra/bootstrap destroy      # opcional: rol OIDC y bucket de estado (cuestan 0 $;
+                                              # su estado también vive en ese bucket, ver backend.tf)
 ```
 
 ## Qué hay dentro
