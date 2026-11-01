@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+data/
+transform/target/
+transform/dbt_packages/
+transform/logs/
+logs/
+.terraform/
+*.tfstate*
+localstack_providers_override.tf
+.terraform.lock.hcl

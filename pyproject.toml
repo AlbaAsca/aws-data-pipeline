@@ -1,0 +1,22 @@
+[project]
+name = "aws-data-pipeline"
+version = "1.0.0"
+description = "Pipeline de datos de punta a punta para AWS, ejecutado en LocalStack"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["transform/target", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM"]
+ignore = ["S608"] # SQL con nombres de tabla internos, no entrada de usuario
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"scripts/*" = ["S603"]

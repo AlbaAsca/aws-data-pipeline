@@ -1,0 +1,16 @@
+# Ingesta (en Lambda solo se empaqueta duckdb: boto3 ya viene en el runtime)
+boto3>=1.35
+duckdb>=1.1
+# Transformación
+dbt-duckdb>=1.9
+# Panel y gráficas
+streamlit>=1.40
+pandas>=2.2
+matplotlib>=3.9,<3.11  # mplcyberpunk aún no soporta 3.11
+mplcyberpunk>=0.7
+# Calidad
+pytest>=8
+moto[s3]>=5
+ruff>=0.8
+# LocalStack + Terraform
+terraform-local>=0.20
