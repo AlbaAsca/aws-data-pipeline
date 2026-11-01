@@ -1,23 +1,42 @@
-# aws-data-pipeline · el tiempo en España, de la API al panel
+<p align="center">
+  <img src="docs/img/hero.svg" alt="aws-data-pipeline: Open-Meteo → Lambda → S3 → dbt + DuckDB → panel" width="100%">
+</p>
 
-[![CI](https://github.com/AlbaAsca/aws-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/AlbaAsca/aws-data-pipeline/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
-![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform&logoColor=white)
-![dbt](https://img.shields.io/badge/transform-dbt%20%2B%20DuckDB-FF694B?logo=dbt&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-Lambda%20%C2%B7%20S3%20%C2%B7%20EventBridge-FF9900?logo=amazonwebservices&logoColor=white)
-![Coste](https://img.shields.io/badge/coste%20en%20LocalStack-0%20%E2%82%AC-2ea44f)
+<p align="center">
+  <a href="https://github.com/AlbaAsca/aws-data-pipeline/actions/workflows/ci.yml"><img src="https://github.com/AlbaAsca/aws-data-pipeline/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/IaC-Terraform-7B42BC?logo=terraform&logoColor=white" alt="Terraform">
+  <img src="https://img.shields.io/badge/dbt-DuckDB-FF694B?logo=dbt&logoColor=white" alt="dbt">
+  <img src="https://img.shields.io/badge/AWS-Lambda%20%C2%B7%20S3%20%C2%B7%20CodeBuild-FF9900?logo=amazonwebservices&logoColor=white" alt="AWS">
+  <img src="https://img.shields.io/badge/deploy-GitHub%20OIDC-181717?logo=github" alt="OIDC">
+  <img src="https://img.shields.io/badge/coste%20real-%3C%200%2C01%20%24-2ea44f" alt="Coste">
+</p>
 
-Un pipeline de datos **de punta a punta, diseñado para AWS** y ejecutado primero en
-[LocalStack](https://www.localstack.cloud/) para no gastar ni un céntimo mientras se construye:
-cada día una Lambda descarga el tiempo horario de seis ciudades españolas, lo guarda en S3
-como Parquet particionado por fecha, dbt + DuckDB lo transforma y comprueba su calidad, y un
-panel en Streamlit lo enseña.
+<p align="center">
+  <b>Un pipeline de datos de punta a punta, como en una empresa, por menos de un céntimo.</b><br>
+  Construido en <a href="https://www.localstack.cloud/">LocalStack</a> a coste 0, probado en una cuenta real de AWS y destruido después.
+</p>
 
-| ☁️ Coste real en AWS | ✅ Calidad | 📦 Datos | 🔁 Reproducible |
+<p align="center">
+  <img src="docs/img/temperature.gif" alt="60 días de temperatura en seis ciudades, dibujándose" width="90%">
+</p>
+
+| ☁️ Coste real en AWS | ✅ Calidad | 🛡️ Operación | 🔁 Reproducible |
 |:---:|:---:|:---:|:---:|
-| **< 0,01 $** en 2 despliegues reales | **16 tests** de dbt + **14** de pytest | **6 ciudades** · 24 h/día · Parquet | **`make all`** en LocalStack, igual en el CI |
+| **< 0,01 $** en 2 despliegues reales | **16 tests** de dbt + **14** de pytest | Reintentos, DLQ y alarmas por email | **`make all`** en LocalStack, igual en el CI |
 
-![Temperatura media diaria](docs/img/temperature.png)
+<p align="center">
+  <a href="#arquitectura">Arquitectura</a> ·
+  <a href="#cómo-ejecutarlo">Ejecutarlo en 2 comandos</a> ·
+  <a href="#decisiones-y-su-porqué">Decisiones</a> ·
+  <a href="#cuánto-costaría-en-aws">Costes</a> ·
+  <a href="#fase-2-despliegue-real-en-aws">AWS real</a> ·
+  <a href="#fase-3-operarlo-como-en-producción">Producción</a>
+</p>
+
+Cada día una Lambda descarga el tiempo horario de seis ciudades españolas, lo guarda en S3 como
+Parquet particionado por fecha, dbt + DuckDB lo transforma y comprueba su calidad, y un panel en
+Streamlit lo enseña.
 
 ## El problema
 
