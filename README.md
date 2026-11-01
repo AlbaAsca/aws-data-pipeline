@@ -34,6 +34,12 @@
   <a href="#fase-3-operarlo-como-en-producción">Producción</a>
 </p>
 
+> 🇬🇧 **In English:** an end-to-end AWS data pipeline. A daily Lambda pulls hourly weather for six Spanish
+> cities from Open-Meteo and writes date-partitioned Parquet to S3; dbt + DuckDB transforms it with 16 data
+> quality tests; Streamlit shows it. Everything is Terraform, built and tested on LocalStack at $0 (CI runs the
+> whole pipeline), then deployed to a real AWS account from GitHub Actions via OIDC (no stored keys), with
+> retries, a DLQ, CloudWatch alarms and a scheduled dbt run in CodeBuild — total cost **< $0.01**, then destroyed.
+
 Cada día una Lambda descarga el tiempo horario de seis ciudades españolas, lo guarda en S3 como
 Parquet particionado por fecha, dbt + DuckDB lo transforma y comprueba su calidad, y un panel en
 Streamlit lo enseña.
