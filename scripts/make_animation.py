@@ -36,7 +36,8 @@ def main() -> None:
     fig.tight_layout()
 
     def draw(i: int):
-        until = days[min(i, len(days) - 1)]
+        # El fotograma 0 es el gráfico completo: es el que se ve si el GIF está en pausa.
+        until = days[-1] if i == 0 else days[min(i - 1, len(days) - 1)]
         for city, df in series.items():
             part = df[df["observation_date"] <= until]
             for artist in (lines[city], glows[city]):
@@ -45,7 +46,7 @@ def main() -> None:
         label.set_text(f"{until:%d %b %Y}")
         return [*lines.values(), *glows.values(), *dots.values(), label]
 
-    frames = len(days) + 15  # pausa al final antes de repetir
+    frames = len(days) + 16  # pausa al final antes de repetir
     anim = FuncAnimation(fig, draw, frames=frames, interval=80, blit=True)
     out = ROOT / "docs" / "img" / "temperature.gif"
     anim.save(out, writer=PillowWriter(fps=12))
