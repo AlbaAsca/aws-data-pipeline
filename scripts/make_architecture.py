@@ -7,8 +7,9 @@ from pathlib import Path
 
 from diagrams import Cluster, Diagram, Edge
 from diagrams.aws.compute import Lambda
-from diagrams.aws.integration import Eventbridge
-from diagrams.aws.management import Cloudwatch
+from diagrams.aws.devtools import Codebuild
+from diagrams.aws.integration import SNS, SQS, Eventbridge
+from diagrams.aws.management import CloudwatchAlarm, ParameterStore
 from diagrams.aws.security import IAMRole
 from diagrams.aws.storage import S3
 from diagrams.generic.database import SQL
@@ -47,27 +48,43 @@ with Diagram(
 ):
     api = Internet("Open-Meteo API\n(JSON horario)")
 
-    with Cluster("AWS · Terraform (tflocal ⇄ terraform)", graph_attr=CLUSTER):
-        cron = Eventbridge("EventBridge\ncron 06:00 UTC")
-        ingest = Lambda("Lambda ingest\nPython + duckdb")
-        role = IAMRole("IAM: solo\nPutObject raw/")
-        logs = Cloudwatch("CloudWatch Logs\n14 días")
-        lake = S3("S3 data lake\nraw/weather/dt=…/\n*.parquet")
+    with Cluster("Despliegue", graph_attr=CLUSTER):
+        ci = GithubActions("GitHub Actions\nCI (LocalStack) · Deploy")
+        oidc = IAMRole("Rol OIDC\nsin claves")
+        tf = Terraform("Terraform\nestado en S3")
 
-    with Cluster("Transformación y consumo", graph_attr=CLUSTER):
+    with Cluster("AWS", graph_attr=CLUSTER):
+        with Cluster("Ingesta", graph_attr=CLUSTER):
+            cron = Eventbridge("EventBridge\n06:00 UTC")
+            cities = ParameterStore("SSM\nciudades")
+            ingest = Lambda("Lambda ingest\nPython + duckdb")
+            lake = S3("S3 data lake\nraw/dt=…/*.parquet\nwarehouse/")
+
+        with Cluster("Alertas", graph_attr=CLUSTER):
+            dlq = SQS("DLQ")
+            alarm = CloudwatchAlarm("Alarmas\nErrors · DLQ")
+            sns = SNS("SNS → email")
+
+        with Cluster("Transformación", graph_attr=CLUSTER):
+            cron_dbt = Eventbridge("EventBridge\n07:00 UTC")
+            build = Codebuild("CodeBuild\ndbt build")
+
+    with Cluster("Consumo", graph_attr=CLUSTER):
         dbt = Dbt("dbt + DuckDB\n3 modelos · 16 tests")
         wh = SQL("warehouse.duckdb")
         panel = Users("Panel Streamlit")
 
-    with Cluster("Automatización", graph_attr=CLUSTER):
-        tf = Terraform("Terraform")
-        ci = GithubActions("GitHub Actions\nLocalStack e2e")
+    ci >> edge("OIDC") >> oidc >> edge() >> tf
+    tf >> Edge(style="dotted", color="#2E8B57", label="despliega", fontcolor="#1F2A44") >> cron
 
     cron >> edge("1 vez al día") >> ingest
+    cities >> edge("lista") >> ingest
     api >> edge("HTTPS + reintentos", "#D6246E") >> ingest
     ingest >> edge("Parquet zstd") >> lake
-    ingest - Edge(style="dashed", color="#9467FD") - role
-    ingest - Edge(style="dashed", color="#9467FD") - logs
-    lake >> edge("read_parquet('s3://…')", "#E07B00") >> dbt >> edge() >> wh >> edge() >> panel
-    tf >> Edge(style="dotted", color="#2E8B57", label="despliega", fontcolor="#1F2A44") >> cron
-    ci >> Edge(style="dotted", color="#2E8B57", label="prueba", fontcolor="#1F2A44") >> tf
+    ingest >> edge("si falla", "#D6246E") >> dlq
+    ingest >> Edge(style="dashed", color="#D6246E") >> alarm
+    dlq >> Edge(style="dashed", color="#D6246E") >> alarm >> edge(color="#D6246E") >> sns
+
+    cron_dbt >> edge() >> build >> edge("read_parquet", "#E07B00") >> dbt
+    lake >> Edge(style="dashed", color="#E07B00") >> build
+    dbt >> edge() >> wh >> edge() >> panel

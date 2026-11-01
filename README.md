@@ -15,7 +15,7 @@ panel en Streamlit lo enseña.
 
 | ☁️ Coste real en AWS | ✅ Calidad | 📦 Datos | 🔁 Reproducible |
 |:---:|:---:|:---:|:---:|
-| **< 0,01 $** en el despliegue de prueba | **16 tests** de dbt + **11** de pytest | **6 ciudades** · 24 h/día · Parquet | **`make all`** en LocalStack, igual en el CI |
+| **< 0,01 $** en 2 despliegues reales | **16 tests** de dbt + **14** de pytest | **6 ciudades** · 24 h/día · Parquet | **`make all`** en LocalStack, igual en el CI |
 
 ![Temperatura media diaria](docs/img/temperature.png)
 
@@ -134,29 +134,38 @@ luego dbt sobre esos ficheros; útil para trabajar en los modelos sin levantar n
 
 ## Permisos y limpieza
 
-**Qué necesitas en AWS** (fase 2): permisos para crear un bucket S3, un rol IAM con su
-política, una función Lambda, un grupo de logs de CloudWatch y una regla de EventBridge. En
-LocalStack no hace falta nada: acepta cualquier credencial.
+**Qué necesitas en AWS:** una única vez, permisos de administración para aplicar
+`infra/bootstrap` (proveedor OIDC de GitHub, rol de despliegue y bucket de estado). A partir de
+ahí despliega el CI con ese rol, que solo puede tocar recursos con prefijo `weather-pipeline-*`.
+En LocalStack no hace falta nada: acepta cualquier credencial.
 
-**Qué permisos tiene el pipeline una vez desplegado:** la Lambda solo puede escribir
-(`s3:PutObject`) bajo `raw/` y en su propio grupo de logs. No puede leer ni borrar nada.
+**Qué permisos tiene el pipeline una vez desplegado:**
+
+| Quién | Puede | No puede |
+|---|---|---|
+| Lambda de ingesta | `PutObject` en `raw/`, leer su parámetro SSM, enviar a su DLQ, escribir sus logs | Leer o borrar datos, tocar otros buckets |
+| CodeBuild (dbt) | Leer `raw/`, escribir solo en `warehouse/`, escribir sus logs | Modificar los datos crudos |
+| Rol de GitHub (OIDC) | Gestionar recursos `weather-pipeline-*` y el estado de Terraform | Nada fuera del proyecto; solo lo asume este repo desde el entorno `aws` |
 
 **Cómo dejarlo todo como estaba:**
 
 ```bash
 make down                                     # LocalStack: para el contenedor y lo borra todo
-terraform -chdir=infra/terraform destroy      # AWS: borra los 11 recursos (el bucket incluido)
+gh workflow run deploy.yml -f action=destroy  # AWS: borra los 26 recursos (el bucket incluido)
+terraform -chdir=infra/bootstrap destroy      # opcional: rol OIDC y bucket de estado (cuestan 0 $)
 ```
 
 ## Qué hay dentro
 
 ```
 src/ingest/handler.py     Lambda: Open-Meteo -> Parquet -> S3 (idempotente por día)
-infra/terraform/          S3 (cifrado, sin acceso público), IAM mínimo, Lambda, EventBridge, logs
+infra/terraform/          S3, Lambda, EventBridge, SSM, DLQ + alarmas + SNS, dbt en CodeBuild
+infra/bootstrap/          Una vez: rol OIDC para GitHub y bucket de estado de Terraform
 transform/                Proyecto dbt: staging (vista) -> marts (tablas) + tests
 dashboard/                Streamlit + gráficas mplcyberpunk
 scripts/                  build_lambda, backfill, run_local, make_charts, make_architecture
 .github/workflows/ci.yml  Lint, tests, dbt, terraform validate y el pipeline entero en LocalStack
+.github/workflows/deploy.yml  Despliegue manual a AWS por OIDC (plan / apply / destroy)
 ```
 
 **Calidad de datos.** dbt comprueba en cada ejecución que no hay duplicados por ciudad y hora,
@@ -229,6 +238,8 @@ Estimación mensual con el volumen real del proyecto (1 invocación diaria de ~5
 | S3 | < 1 MB almacenado · 30 PUT | < 0,01 $ |
 | EventBridge (regla programada) | 30 eventos | 0 $ |
 | CloudWatch Logs | < 1 MB | 0 $ |
+| CodeBuild (dbt diario) | ~1 min/día en `general1.small` | 0 $ (100 min/mes gratis) |
+| CloudWatch Alarms, SNS, SQS, SSM | 2 alarmas, avisos por email, DLQ casi vacía, 1 parámetro estándar | 0 $ (capa gratuita permanente) |
 | Athena (opcional, fase 2) | consultas sobre < 1 MB | ~0 $ (5 $/TB escaneado, mínimo 10 MB por consulta) |
 | **Total** | | **< 0,05 $/mes** |
 
@@ -318,21 +329,66 @@ proyecto. El presupuesto se queda como red de seguridad.
 
 <!-- Captura de la factura: AWS tarda ~24 h en reflejar el gasto; se añadirá aquí. -->
 
-> **Mejora pendiente:** la prueba se hizo con el usuario *root* desde CloudShell. Para algo más
-> que una demo de una hora, lo correcto es un usuario o rol IAM con permisos acotados y MFA.
+La prueba de la fase 2 se hizo con el usuario *root* desde CloudShell. La fase 3 lo corrige.
+
+## Fase 3: operarlo como en producción
+
+Tras la fase 2 quedaron anotadas cinco carencias. Están resueltas y probadas en AWS real el
+mismo 1 de noviembre de 2026, desplegando **desde GitHub Actions, sin claves**:
+
+| Antes | Ahora | Dónde |
+|---|---|---|
+| Despliegue a mano con *root* | Workflow `Deploy (AWS)` (plan / apply / destroy) que asume un rol por **OIDC**, limitado a `weather-pipeline-*` y al entorno `aws` | `.github/workflows/deploy.yml`, `infra/bootstrap/` |
+| Estado de Terraform en local | **Backend S3** con versionado y bloqueo nativo (`use_lockfile`), sin DynamoDB | `infra/bootstrap/` |
+| Si la Lambda falla, solo queda en los logs | **2 reintentos asíncronos → DLQ (SQS)**, alarmas de CloudWatch sobre `Errors` y la DLQ, aviso por **SNS** al email | `infra/terraform/monitoring.tf` |
+| dbt solo en un portátil o en el CI | **dbt diario en CodeBuild** (07:00 UTC): clona el repo, `dbt build` contra S3 y deja `warehouse.duckdb` en `warehouse/` | `infra/terraform/dbt_schedule.tf` |
+| 6 ciudades fijas en el código | **Parámetro SSM** gestionado por Terraform; un test verifica que coincide con el *seed* de dbt | `var.cities`, `handler.load_cities()` |
+
+```mermaid
+flowchart LR
+    GH["GitHub Actions<br/>workflow_dispatch"] -- "token OIDC<br/>(sin secretos)" --> STS["AWS STS"]
+    STS -- "credenciales<br/>de 1 h" --> TF["terraform apply<br/>estado en S3 + lock"]
+    TF --> STACK["26 recursos<br/>weather-pipeline-*"]
+    STACK --> RUN["backfill 3 días<br/>+ dbt en CodeBuild"]
+```
+
+**Resultado en la cuenta real:** `Apply complete! Resources: 26 added`, 3 días ingeridos,
+dbt en CodeBuild `SUCCEEDED` en 49 s y `Destroy complete! Resources: 26 destroyed`.
+
+![Ejecuciones del workflow Deploy](docs/img/aws/08-github-deploy-runs.jpg)
+![dbt en CodeBuild lanzado por el rol de GitHub](docs/img/aws/06-codebuild-dbt.jpg)
+![Alarmas, parámetro SSM y objetos en S3](docs/img/aws/07-alarms-ssm-s3.jpg)
+
+**Lo que enseñó esta vez la nube real:**
+
+- **GitHub ya no usa `repo:owner/name` en el token OIDC.** Los repos nuevos llevan sujetos
+  inmutables (`repo:AlbaAsca@<id>/aws-data-pipeline@<id>:environment:aws`) y el primer
+  despliegue falló con `Not authorized to perform sts:AssumeRoleWithWebIdentity`. La política
+  de confianza acepta ahora los dos formatos.
+- **La alarma funcionó sin quererlo.** Saltó nada más crearse: las métricas de Lambda se guardan
+  por nombre de función y la ventana de 1 h incluía el `503` real de la fase 2. Justo lo que debe
+  hacer.
+- **El *home* de CloudShell (1 GB) no da para Terraform**: `TF_DATA_DIR=/tmp/...`.
+
+**Cómo usarlo en tu cuenta:**
+
+```bash
+terraform -chdir=infra/bootstrap init && terraform -chdir=infra/bootstrap apply   # una vez, como admin
+gh variable set AWS_ROLE_ARN    -b "$(terraform -chdir=infra/bootstrap output -raw deploy_role_arn)"
+gh variable set TF_STATE_BUCKET -b "$(terraform -chdir=infra/bootstrap output -raw state_bucket)"
+gh variable set AWS_REGION -b eu-west-1 && gh variable set ALERT_EMAIL -b tu@email.com
+gh workflow run deploy.yml -f action=apply -f backfill_days=3
+gh workflow run deploy.yml -f action=destroy
+```
 
 ## Limitaciones y siguientes pasos
 
-Es un proyecto de portfolio y está terminado, pero hay cosas que haría distinto en producción:
-
-| Hoy | En producción | Por qué |
+| Hoy | Siguiente paso | Por qué |
 |---|---|---|
-| dbt + DuckDB en un portátil o en el CI | dbt en una tarea programada (ECS Fargate o CodeBuild), o `dbt-athena` | Que la transformación también corra sola cada día |
-| `warehouse.duckdb` local | Tablas Iceberg en S3 Tables, consultables desde Athena | Un único sitio para los datos, sin copias locales |
-| Si la Lambda falla, solo queda en los logs | Alarma de CloudWatch sobre `Errors` y cola de mensajes fallidos (DLQ) | Enterarse del fallo sin tener que mirar |
-| Prueba en AWS con el usuario *root* | Rol IAM con permisos mínimos y MFA; despliegue desde el CI con OIDC | Nunca usar *root* para el trabajo diario |
-| Estado de Terraform en local | *Backend* S3 con bloqueo | Trabajo en equipo sin pisarse el estado |
-| 6 ciudades fijas en el código | Lista en un parámetro (SSM) o en el *seed* | Añadir ciudades sin desplegar código |
+| `warehouse.duckdb` como fichero en S3 | Tablas Iceberg en S3 Tables, consultables desde Athena | Consultas concurrentes y SQL desde cualquier herramienta |
+| El panel de Streamlit corre en local | Descargar el `warehouse.duckdb` de S3 o publicarlo en Streamlit Community Cloud | Que el panel esté siempre al día sin ejecutar nada |
+| CodeBuild con la imagen estándar sobre Amazon Linux 2 | Imagen de Amazon Linux 2023 | AWS recomienda migrar el *host* |
+| El entorno `aws` de GitHub no exige aprobación | Revisores obligatorios en el entorno | Que nadie despliegue sin un segundo par de ojos |
 
 ## Licencia
 
