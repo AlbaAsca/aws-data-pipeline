@@ -61,7 +61,7 @@ jobs:
           python - <<'EOF'
           import duckdb
           con = duckdb.connect("data/warehouse.duckdb", read_only=True)
-          n = con.sql("select count(*) from fct_weather_daily").fetchone()[0]
+          n = con.execute("select count(*) from fct_weather_daily").fetchone()[0]
           print(con.sql("select * from city_climate_summary"))
           assert n == 18, f"esperaba 6 ciudades x 3 días, hay {n}"
           EOF
