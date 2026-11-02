@@ -21,20 +21,21 @@ from diagrams.onprem.network import Internet
 
 OUT = Path(__file__).resolve().parents[1] / "docs" / "img" / "architecture"
 
-GRAPH = {"bgcolor": "#FFFFFF", "pad": "0.4", "fontcolor": "#1F2A44", "fontsize": "22", "splines": "spline"}
-NODE = {"fontcolor": "#1F2A44", "fontsize": "12"}
+# Paleta Tokyo Night Day (variante clara: los iconos oficiales negros se leen bien).
+GRAPH = {"bgcolor": "#E1E2E7", "pad": "0.4", "fontcolor": "#3760BF", "fontsize": "22", "splines": "spline"}
+NODE = {"fontcolor": "#3760BF", "fontsize": "12"}
 CLUSTER = {
-    "bgcolor": "#F3F6FC",
-    "fontcolor": "#232F3E",
-    "pencolor": "#8C9BB5",
+    "bgcolor": "#D0D5E3",
+    "fontcolor": "#3760BF",
+    "pencolor": "#848CB5",
     "fontsize": "14",
     "style": "rounded",
     "labelloc": "b",
 }
 
 
-def edge(label: str = "", color: str = "#0B7FAB") -> Edge:
-    return Edge(label=label, color=color, fontcolor="#1F2A44", fontsize="11", penwidth="2")
+def edge(label: str = "", color: str = "#2E7DE9") -> Edge:
+    return Edge(label=label, color=color, fontcolor="#3760BF", fontsize="11", penwidth="2")
 
 
 with Diagram(
@@ -75,16 +76,16 @@ with Diagram(
         panel = Users("Panel Streamlit")
 
     ci >> edge("OIDC") >> oidc >> edge() >> tf
-    tf >> Edge(style="dotted", color="#2E8B57", label="despliega", fontcolor="#1F2A44") >> cron
+    tf >> Edge(style="dotted", color="#587539", label="despliega", fontcolor="#3760BF") >> cron
 
     cron >> edge("1 vez al día") >> ingest
     cities >> edge("lista") >> ingest
-    api >> edge("HTTPS + reintentos", "#D6246E") >> ingest
+    api >> edge("HTTPS + reintentos", "#F52A65") >> ingest
     ingest >> edge("Parquet zstd") >> lake
-    ingest >> edge("si falla", "#D6246E") >> dlq
-    ingest >> Edge(style="dashed", color="#D6246E") >> alarm
-    dlq >> Edge(style="dashed", color="#D6246E") >> alarm >> edge(color="#D6246E") >> sns
+    ingest >> edge("si falla", "#F52A65") >> dlq
+    ingest >> Edge(style="dashed", color="#F52A65") >> alarm
+    dlq >> Edge(style="dashed", color="#F52A65") >> alarm >> edge(color="#F52A65") >> sns
 
-    cron_dbt >> edge() >> build >> edge("read_parquet", "#E07B00") >> dbt
-    lake >> Edge(style="dashed", color="#E07B00") >> build
+    cron_dbt >> edge() >> build >> edge("read_parquet", "#B15C00") >> dbt
+    lake >> Edge(style="dashed", color="#B15C00") >> build
     dbt >> edge() >> wh >> edge() >> panel

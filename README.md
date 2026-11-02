@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/temperature.gif?v=2" alt="60 días de temperatura en seis ciudades, dibujándose" width="90%">
+  <img src="docs/img/temperature.gif?v=3" alt="60 días de temperatura en seis ciudades, dibujándose" width="90%">
 </p>
 
 | ☁️ Coste real en AWS | ✅ Calidad | 🛡️ Operación | 🔁 Reproducible |
@@ -188,7 +188,7 @@ src/ingest/handler.py     Lambda: Open-Meteo -> Parquet -> S3 (idempotente por d
 infra/terraform/          S3, Lambda, EventBridge, SSM, DLQ + alarmas + SNS, dbt en CodeBuild
 infra/bootstrap/          Una vez: rol OIDC para GitHub y bucket de estado de Terraform
 transform/                Proyecto dbt: staging (vista) -> marts (tablas) + tests
-dashboard/                Streamlit + gráficas mplcyberpunk
+dashboard/                Streamlit + gráficas con la paleta Tokyo Night
 scripts/                  build_lambda, backfill, run_local, make_charts, make_architecture
 .github/workflows/ci.yml  Lint, tests, dbt, terraform validate y el pipeline entero en LocalStack
 .github/workflows/deploy.yml  Despliegue manual a AWS por OIDC (plan / apply / destroy)

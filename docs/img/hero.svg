@@ -1,25 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <!-- Paleta Tokyo Night (github.com/folke/tokyonight.nvim) -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0B1026"/>
-      <stop offset="1" stop-color="#212946"/>
+      <stop offset="0" stop-color="#16161E"/>
+      <stop offset="1" stop-color="#16161E"/>
     </linearGradient>
-    <linearGradient id="title" x1="0" x2="1">
-      <stop offset="0" stop-color="#08F7FE"/>
-      <stop offset="0.55" stop-color="#FE53BB"/>
-      <stop offset="1" stop-color="#F5D300"/>
-    </linearGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="4" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="title" x1="0" x2="1"><stop offset="0" stop-color="#7AA2F7"/><stop offset="1" stop-color="#BB9AF7"/></linearGradient>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0H0V40" fill="none" stroke="#2A3459" stroke-width="1"/>
+      <path d="M40 0H0V40" fill="none" stroke="#1F2335" stroke-width="1"/>
     </pattern>
     <style>
-      .node { fill: #161D3A; stroke-width: 2; }
-      .label { fill: #E0E6F0; font-size: 17px; font-weight: 600; text-anchor: middle; }
-      .sub { fill: #8C9BB5; font-size: 13px; text-anchor: middle; }
+      .node { fill: #24283B; stroke-width: 2; }
+      .label { fill: #C0CAF5; font-size: 17px; font-weight: 600; text-anchor: middle; }
+      .sub { fill: #9AA5CE; font-size: 13px; text-anchor: middle; }
       .flow { fill: none; stroke-width: 2.5; stroke-dasharray: 6 8; animation: dash 1.2s linear infinite; }
       @keyframes dash { to { stroke-dashoffset: -28; } }
       .pulse { animation: pulse 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
@@ -31,52 +24,52 @@
   <rect width="1200" height="400" rx="18" fill="url(#grid)" opacity="0.6"/>
 
   <!-- Título -->
-  <text x="60" y="92" font-size="54" font-weight="800" fill="url(#title)" filter="url(#glow)">aws-data-pipeline</text>
-  <text x="62" y="132" font-size="22" fill="#E0E6F0">Del cielo al panel: el tiempo de 6 ciudades españolas, cada día, en AWS.</text>
-  <text x="62" y="162" font-size="16" fill="#8C9BB5">Lambda · S3 · EventBridge · CodeBuild · Terraform · dbt + DuckDB · GitHub OIDC · LocalStack</text>
+  <text x="60" y="92" font-size="54" font-weight="800" fill="url(#title)">aws-data-pipeline</text>
+  <text x="62" y="132" font-size="22" fill="#C0CAF5">Del cielo al panel: el tiempo de 6 ciudades españolas, cada día, en AWS.</text>
+  <text x="62" y="162" font-size="16" fill="#9AA5CE">Lambda · S3 · EventBridge · CodeBuild · Terraform · dbt + DuckDB · GitHub OIDC · LocalStack</text>
 
   <!-- Flujo -->
   <g>
-    <path class="flow" stroke="#08F7FE" d="M200 290 H290"/>
-    <path class="flow" stroke="#08F7FE" d="M440 290 H530"/>
-    <path class="flow" stroke="#F5D300" d="M680 290 H770"/>
-    <path class="flow" stroke="#FE53BB" d="M920 290 H1010"/>
+    <path class="flow" stroke="#7DCFFF" d="M200 290 H290"/>
+    <path class="flow" stroke="#7DCFFF" d="M440 290 H530"/>
+    <path class="flow" stroke="#E0AF68" d="M680 290 H770"/>
+    <path class="flow" stroke="#BB9AF7" d="M920 290 H1010"/>
   </g>
 
   <!-- Paquetes de datos viajando -->
-  <g filter="url(#glow)">
-    <circle r="6" fill="#08F7FE"><animateMotion dur="4s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
-    <circle r="5" fill="#FE53BB"><animateMotion dur="4s" begin="1.3s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
-    <circle r="5" fill="#F5D300"><animateMotion dur="4s" begin="2.6s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
+  <g>
+    <circle r="6" fill="#7DCFFF"><animateMotion dur="4s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
+    <circle r="5" fill="#BB9AF7"><animateMotion dur="4s" begin="1.3s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
+    <circle r="5" fill="#E0AF68"><animateMotion dur="4s" begin="2.6s" repeatCount="indefinite" path="M130 290 H1080"/></circle>
   </g>
 
   <!-- Nodos -->
   <g>
-    <rect class="node" x="60" y="245" width="140" height="90" rx="14" stroke="#08F7FE"/>
+    <rect class="node" x="60" y="245" width="140" height="90" rx="14" stroke="#7DCFFF"/>
     <text class="label" x="130" y="285">Open-Meteo</text>
     <text class="sub" x="130" y="308">API pública</text>
 
-    <rect class="node" x="290" y="245" width="150" height="90" rx="14" stroke="#FF9900"/>
+    <rect class="node" x="290" y="245" width="150" height="90" rx="14" stroke="#FF9E64"/>
     <text class="label" x="365" y="285">λ Lambda</text>
     <text class="sub" x="365" y="308">06:00 UTC · reintentos</text>
 
-    <rect class="node" x="530" y="245" width="150" height="90" rx="14" stroke="#7AA116"/>
+    <rect class="node" x="530" y="245" width="150" height="90" rx="14" stroke="#9ECE6A"/>
     <text class="label" x="605" y="285">S3 data lake</text>
     <text class="sub" x="605" y="308">Parquet · dt=AAAA-MM-DD</text>
 
-    <rect class="node" x="770" y="245" width="150" height="90" rx="14" stroke="#FF694B"/>
+    <rect class="node" x="770" y="245" width="150" height="90" rx="14" stroke="#F7768E"/>
     <text class="label" x="845" y="285">dbt + DuckDB</text>
     <text class="sub" x="845" y="308">16 tests de calidad</text>
 
-    <rect class="node" x="1010" y="245" width="130" height="90" rx="14" stroke="#FE53BB"/>
+    <rect class="node" x="1010" y="245" width="130" height="90" rx="14" stroke="#BB9AF7"/>
     <text class="label" x="1075" y="285">Panel</text>
     <text class="sub" x="1075" y="308">Streamlit</text>
   </g>
 
   <!-- Cifras -->
   <g class="pulse">
-    <rect x="860" y="40" width="280" height="40" rx="20" fill="#0B1026" stroke="#00ff41" stroke-width="1.5"/>
-    <text x="1000" y="66" font-size="16" fill="#00ff41" text-anchor="middle">● &lt; 0,01 $ en AWS real · CI en verde</text>
+    <rect x="860" y="40" width="280" height="40" rx="20" fill="#16161E" stroke="#9ECE6A" stroke-width="1.5"/>
+    <text x="1000" y="66" font-size="16" fill="#9ECE6A" text-anchor="middle">● &lt; 0,01 $ en AWS real · CI en verde</text>
   </g>
-  <text x="1140" y="378" font-size="12" fill="#5B6B8C" text-anchor="end">Fase 1 LocalStack · Fase 2 AWS real · Fase 3 OIDC + alarmas + dbt programado</text>
+  <text x="1140" y="378" font-size="12" fill="#565F89" text-anchor="end">Fase 1 LocalStack · Fase 2 AWS real · Fase 3 OIDC + alarmas + dbt programado</text>
 </svg>

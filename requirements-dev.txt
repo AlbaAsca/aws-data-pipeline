@@ -6,8 +6,7 @@ dbt-duckdb>=1.9
 # Panel y gráficas
 streamlit>=1.40
 pandas>=2.2
-matplotlib>=3.9,<3.11  # mplcyberpunk aún no soporta 3.11
-mplcyberpunk>=0.7
+matplotlib>=3.9
 # Calidad
 pytest>=8
 moto[s3,ssm]>=5

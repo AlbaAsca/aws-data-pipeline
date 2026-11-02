@@ -11,7 +11,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "dashboard"))
 
-from charts import PALETTE  # noqa: E402  (también aplica el estilo cyberpunk)
+from charts import PALETTE  # noqa: E402  (también aplica el estilo Tokyo Night)
 
 
 def main() -> None:
@@ -32,7 +32,7 @@ def main() -> None:
         lines[city] = ax.plot([], [], color=color, linewidth=2, label=city)[0]
         dots[city] = ax.plot([], [], "o", color=color, markersize=6)[0]
     ax.legend(ncol=6, loc="upper center", bbox_to_anchor=(0.5, -0.1), frameon=False, fontsize=9)
-    label = ax.text(0.99, 0.95, "", transform=ax.transAxes, ha="right", va="top", fontsize=12, color="#08F7FE")
+    label = ax.text(0.99, 0.95, "", transform=ax.transAxes, ha="right", va="top", fontsize=12, color="#7DCFFF")
     fig.tight_layout()
 
     def draw(i: int):
